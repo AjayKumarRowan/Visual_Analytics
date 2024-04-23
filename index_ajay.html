@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Car Passes Through Gates</title>
+  <h1>Car Passes Through Gates</h1>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+</head>
+<body>
+  <div>
+    <label for="carType">Choose a car type:</label>
+    <select id="carType">
+      <option value="all">All</option>
+      <!-- Options will be dynamically populated -->
+    </select>
+  </div>
+  <div id="chart"></div>
+  <div id="status"></div>
+
+  <script>
+    const width = 1000;
+    const height = 400;
+    const margin = { top: 20, right: 50, bottom: 100, left: 100 };
+
+    const svg = d3.select("#chart")
+      .append("svg")
+      .attr("width", width + margin.left + margin.right)
+      .attr("height", height + margin.top + margin.bottom)
+      .append("g")
+      .attr("transform", `translate(${margin.left},${margin.top})`);
+
+    d3.json("../data/sensor_data_per_ID.json").then(function(jsonData) {
+      const carTypes = new Set();
+      const gateCountsByType = new Map();
+
+      for (const key in jsonData) {
+        const carType = jsonData[key]["car-type"];
+        carTypes.add(carType);
+        const routes = jsonData[key].route;
+        for (const date in routes) {
+          routes[date].forEach(event => {
+            const gateName = Object.values(event)[0];
+            if (!gateCountsByType.has(carType)) {
+              gateCountsByType.set(carType, new Map());
+            }
+            const typeMap = gateCountsByType.get(carType);
+            typeMap.set(gateName, (typeMap.get(gateName) || 0) + 1);
+          });
+        }
+      }
+
+      carTypes.forEach(type => {
+        d3.select("#carType").append("option").text(type).attr("value", type);
+      });
+
+      function updateChart(selectedType) {
+        const data = selectedType === "all" ? Array.from(gateCountsByType.values()).reduce((acc, curr) => {
+          curr.forEach((count, gate) => acc.set(gate, (acc.get(gate) || 0) + count));
+          return acc;
+        }, new Map()) : gateCountsByType.get(selectedType);
+
+        const flattenedData = Array.from(data, ([gateName, count]) => ({
+          gateName,
+          count
+        }));
+
+        const xScale = d3.scaleBand()
+          .domain(flattenedData.map(d => d.gateName))
+          .range([0, width])
+          .padding(0.1);
+
+        const yScale = d3.scaleLinear()
+          .domain([0, d3.max(flattenedData, d => d.count)])
+          .nice()
+          .range([height, 0]);
+
+        const bars = svg.selectAll(".bar")
+          .data(flattenedData, d => d.gateName);
+
+        bars.enter().append("rect")
+          .attr("class", "bar")
+          .merge(bars)
+          .attr("x", d => xScale(d.gateName))
+          .attr("y", d => yScale(d.count))
+          .attr("width", xScale.bandwidth())
+          .attr("height", d => height - yScale(d.count))
+          .style("fill", (_, i) => d3.schemeCategory10[i % 10]);
+
+        const labels = svg.selectAll(".label")
+          .data(flattenedData, d => d.gateName);
+
+        labels.enter().append("text")
+          .attr("class", "label")
+          .merge(labels)
+          .attr("x", d => xScale(d.gateName) + xScale.bandwidth() / 2)
+          .attr("y", d => yScale(d.count) - 15)  // Adjust this value to move text above the bars
+          .attr("text-anchor", "end")
+          .attr("transform", d => `rotate(-90, ${xScale(d.gateName) + xScale.bandwidth() / 2}, ${yScale(d.count) - 20})`)
+          .text(d => d.count);
+
+        labels.exit().remove();
+        bars.exit().remove();
+
+        svg.selectAll(".axis").remove();
+
+        svg.append("g")
+          .attr("class", "x axis")
+          .attr("transform", `translate(0,${height})`)
+          .call(d3.axisBottom(xScale))
+          .selectAll("text")
+          .style("text-anchor", "end")
+          .attr("dx", "-.8em")
+          .attr("dy", ".15em")
+          .attr("transform", "rotate(-65)");
+
+        svg.append("g")
+          .attr("class", "y axis")
+          .call(d3.axisLeft(yScale));
+      }
+
+      updateChart("all");
+
+      d3.select("#carType").on("change", function() {
+        updateChart(this.value);
+      });
+
+      svg.append("text")
+          .attr("transform", "rotate(-90)")
+          .attr("y", 0 - margin.left)
+          .attr("x", 0 - (height / 2))
+          .attr("dy", "1em")
+          .style("text-anchor", "middle")
+          .text("Number of Cars");
+
+      svg.append("text")
+          .attr("x", width / 2)
+          .attr("y", height + margin.bottom - 20)
+          .style("text-anchor", "middle")
+          .text("Gate Name");
+    });
+  </script>
+</body>
+</html>

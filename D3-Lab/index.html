@@ -30,7 +30,7 @@
       .append("g")
       .attr("transform", `translate(${margin.left},${margin.top})`);
 
-    d3.json("../data/sensor_data_per_ID.json").then(function(jsonData) {
+    d3.json("sensor_data_per_ID.json").then(function(jsonData) {
       const carTypes = new Set();
       const gateCountsByType = new Map();
 
